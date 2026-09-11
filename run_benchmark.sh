@@ -5,8 +5,9 @@
 # не изменён; остальные реализации обязаны давать те же инварианты
 # (trades=77576, volume=1973216, resting=21620) — иначе прогон помечается FAIL.
 #
-# Порядок: сначала Go, потом Rust, затем остальные. Переменные:
-#   LANGS="go rust c cpp ..."  — какие реализации гонять (по умолчанию все найденные)
+# Порядок: сначала Go автора, Go с плоской книгой, Rust, затем остальные. Переменные:
+#   LANGS="go goflat rust c cpp ..." — какие реализации гонять (по умолчанию все найденные);
+#              go — код автора (golang/), goflat — go/ с плоской книгой (тот же алгоритм, что в rust/)
 #   WARM=1   — три холостых прогона каждого бинарника перед замером (первые
 #              запуски процесса после простоя на Mac идут вдвое медленнее)
 #   ROUNDS=N — повторить замер N раз, в сводке — медиана по раундам
@@ -15,7 +16,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export PATH="/opt/homebrew/opt/go/bin:$PATH"
 source "$HOME/.cargo/env" 2>/dev/null || true
 ROUNDS="${ROUNDS:-1}"; WARM="${WARM:-0}"
-ALL="go rust c cpp asm csharp java nodejs php python"
+ALL="go goflat rust c cpp asm csharp java nodejs php python"
 LANGS="${LANGS:-$ALL}"
 OUT="$DIR/.build/results.tsv"; mkdir -p "$DIR/.build"
 
@@ -32,11 +33,12 @@ echo "=========================================================="
 cmd_of() {
   case "$1" in
     go)   ( cd "$DIR/golang" && go build -ldflags="-s -w" -o "$DIR/.build/engine_go" . ) || return 1; echo "$DIR/.build/engine_go" ;;
+    goflat) [ -x "$DIR/go/run.sh" ] || return 1; echo "$DIR/go/run.sh" ;;
     rust) ( cd "$DIR/rust" && RUSTFLAGS="-C target-cpu=native" cargo build --release -q --bin author_protocol ) || return 1; echo "$DIR/rust/target/release/author_protocol" ;;
     *)    [ -x "$DIR/$1/run.sh" ] || return 1; echo "$DIR/$1/run.sh" ;;
   esac
 }
-label_of() { case "$1" in go) echo "Go";; rust) echo "Rust";; c) echo "C";; cpp) echo "C++";; csharp) echo "C#";; java) echo "Java";; php) echo "PHP";; nodejs) echo "NodeJS";; python) echo "Python";; asm) echo "ASM";; *) echo "$1";; esac; }
+label_of() { case "$1" in go) echo "Go (автор)";; goflat) echo "Go (flat)";; rust) echo "Rust";; c) echo "C";; cpp) echo "C++";; csharp) echo "C#";; java) echo "Java";; php) echo "PHP";; nodejs) echo "NodeJS";; python) echo "Python";; asm) echo "ASM";; *) echo "$1";; esac; }
 
 : > "$OUT"
 for lang in $LANGS; do
@@ -68,7 +70,7 @@ for lang, r, avg, best, status in rows:
     ok[lang] &= (status == 'OK')
 if not by: sys.exit(0)
 med = {l: st.median(v) for l, v in by.items()}
-label = {'go':'Go','rust':'Rust','c':'C','cpp':'C++','csharp':'C#','java':'Java','php':'PHP','nodejs':'NodeJS','python':'Python','asm':'ASM'}
+label = {'go':'Go (автор)','goflat':'Go (flat)','rust':'Rust','c':'C','cpp':'C++','csharp':'C#','java':'Java','php':'PHP','nodejs':'NodeJS','python':'Python','asm':'ASM'}
 fast = min(med.values()); go = med.get('go')
 print(f"{'':2} {'язык':8} {'ms':>10} {'M ордеров/с':>13} {'к лучшему':>10} {'к Go':>8}  инварианты")
 for i, (l, m) in enumerate(sorted(med.items(), key=lambda kv: kv[1]), 1):
